@@ -71,11 +71,12 @@ clib_plugin(time       C_SOURCES error.c time.c       PL_LIBS time.pl THREADED)
 test_libs(time)
 endif()
 clib_plugin(process    C_SOURCES error.c process.c    PL_LIBS process.pl THREADED)
+clib_plugin(desktop                                   PL_LIBS desktop.pl)
 clib_plugin(streaminfo C_SOURCES error.c streaminfo.c PL_LIBS streaminfo.pl)
 if(HAVE_MALLINFO)
 clib_plugin(mallocinfo C_SOURCES error.c mallocinfo.c PL_LIBS mallocinfo.pl)
 endif()
-test_libs(process)
+test_libs(process desktop)
 
 if(UNIX)
 clib_plugin(unix   C_SOURCES error.c unix.c   PL_LIBS unix.pl)
@@ -116,7 +117,7 @@ test_libs(uuid)
 # Documentation
 
 # Files that have PlDoc comments whose TeX file is included in clib.tex
-set(pldoc_files process.pl uri.pl filesex.pl uid.pl udp_broadcast.pl
+set(pldoc_files process.pl desktop.pl uri.pl filesex.pl uid.pl udp_broadcast.pl
     uuid.pl unix.pl syslog.pl socket.pl prolog_stream.pl md5.pl
     hash_stream.pl time.pl)
 
