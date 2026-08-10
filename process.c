@@ -208,6 +208,19 @@ typedef struct wait_options
 } wait_options;
 
 
+/* True when we start the process and never look at it again: detached(true)
+   without process(PID) and without pipes.  In this case process_create/3
+   returns as soon as the process is started.  On POSIX systems we fork
+   twice, such that the process is inherited by init and we do not have to
+   reclaim it.  On Windows we simply close the handles.
+*/
+
+static int
+fire_and_forget(const p_options *info)
+{ return info->detached && info->pid == 0 && info->pipes == 0;
+}
+
+
 typedef enum create_method
 { PCREATE_SPAWN,
   PCREATE_VFORK,
@@ -1509,6 +1522,16 @@ do_create_process(p_options *info)
       return PL_unify_integer(info->pid, pi.dwProcessId);
     }
 
+    if ( fire_and_forget(info) )	/* let the process go its own way */
+    { CloseHandle(pi.hProcess);
+      if ( hJob )
+	CloseHandle(hJob);
+      if ( console )
+	Swinrelease_pseudoconsole(console);
+
+      return TRUE;
+    }
+
     rc = win_wait_success(info->exe_name, pi.hProcess);
     if ( console )
       Swinrelease_pseudoconsole(console);
@@ -1994,6 +2017,13 @@ do_create_process_fork(p_options *info, create_method method)
     restoreSignals(&set);
     PL_cleanup_fork();
 
+    if ( fire_and_forget(info) )
+    { pid_t p2 = fork();			/* fork again and die, such */
+						/* that init inherits p2 */
+      if ( p2 != 0 )
+	_exit(p2 > 0 ? 0 : 1);
+    }
+
 #if defined(HAVE_SYS_RESOURCE_H) && defined(PRIO_PROCESS)
     if ( info->priority != 255 )
       setpriority(PRIO_PROCESS, pid, info->priority);
@@ -2122,6 +2152,8 @@ do_create_process(p_options *info)
   posix_spawnattr_t attr;
   int rc;
 
+  if ( fire_and_forget(info) )		/* needs the double fork */
+    return do_create_process_fork(info, PCREATE_FORK);
   if ( info->cwd || needs_ctty(info) || create_process_method != PCREATE_SPAWN )
     return do_create_process_fork(info, create_process_method);
 
@@ -2197,7 +2229,10 @@ do_create_process(p_options *info)
 
 static int
 do_create_process(p_options *info)
-{ return do_create_process_fork(info, create_process_method);
+{ if ( fire_and_forget(info) )		/* needs the double fork */
+    return do_create_process_fork(info, PCREATE_FORK);
+
+  return do_create_process_fork(info, create_process_method);
 }
 
 #endif /*HAVE_POSIX_SPAWN*/
