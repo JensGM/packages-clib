@@ -545,6 +545,32 @@ nbio_domain(nbio_sock_t socket)
 }
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+A socket must not survive an exec().  A child that inherits a listening
+socket keeps its port in use for as  long as it lives, so a server does
+not come back after we restart it, and the child may accept connections
+that were meant for us.  Prolog streams get this from Snew(), but until
+(and unless) a socket is turned into  a stream it is a plain OS handle
+that nothing else protects.
+
+Ask the OS to  create the socket with the  flag already set where that
+is possible: another thread may  fork()  between creating the descriptor
+and setting the flag on it here.
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+static void
+set_close_on_exec(SOCKET socket)
+{
+#ifdef __WINDOWS__
+  SetHandleInformation((HANDLE)socket, HANDLE_FLAG_INHERIT, 0);
+#elif defined(FD_CLOEXEC)
+  int flags;
+
+  if ( (flags=fcntl(socket, F_GETFD)) != -1 )
+    fcntl(socket, F_SETFD, flags|FD_CLOEXEC);
+#endif
+}
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Allocate a wrapper for an OS  socket.   The  wrapper  is allocated in an
 array of pointers, to keep small  integer   identifiers  we can use with
 FD_SET, etc. for implementing a compatible nbio_select().
@@ -553,6 +579,8 @@ FD_SET, etc. for implementing a compatible nbio_select().
 static plsocket *
 allocSocket(SOCKET socket)
 { plsocket *p;
+
+  set_close_on_exec(socket);
 
   if ( !(p = malloc(sizeof(*p))) )
   { PL_resource_error("memory");
@@ -876,7 +904,13 @@ nbio_socket(int domain, int type, int protocol)
 
   assert(initialised);
 
-  if ( (sock = socket(domain, type , protocol)) == INVALID_SOCKET )
+#ifdef SOCK_CLOEXEC			/* see set_close_on_exec() */
+  sock = socket(domain, type|SOCK_CLOEXEC, protocol);
+  if ( sock == INVALID_SOCKET && GET_ERRNO == EINVAL )
+#endif
+    sock = socket(domain, type, protocol);	/* no flag in this kernel */
+
+  if ( sock == INVALID_SOCKET )
   { nbio_error(GET_ERRNO, TCP_ERRNO);
     return NULL;
   }
