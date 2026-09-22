@@ -63,7 +63,7 @@ clib_plugin(sha4pl
 	     PL_LIBS sha.pl)
 test_libs(crypt memfile readutil stream uri filesex)
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT WASI)
 clib_plugin(cgi        C_SOURCES error.c form.c cgi.c PL_LIBS cgi.pl)
 test_libs(cgi)
 if(MULTI_THREADED)
@@ -106,9 +106,9 @@ if(MULTI_THREADED)
   test_libs(socket af_unix udp_sockets)
 endif()
 endif(HAVE_SOCKET)
-else(NOT EMSCRIPTEN)
+else(NOT EMSCRIPTEN AND NOT WASI)
   swipl_plugin(uuid                                                                          PL_LIBS uuid.pl) 
-endif(NOT EMSCRIPTEN)
+endif(NOT EMSCRIPTEN AND NOT WASI)
 
 test_libs(uuid)
 
